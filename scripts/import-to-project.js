@@ -13,6 +13,7 @@ const { graphql } = require("@octokit/graphql");
 
     const projectId = process.env.PROJECT_ID;
     const repositoryId = process.env.REPO_ID;
+    console.log("repo id:",repositoryId);
 
     // 1️⃣ Fetch all project fields and their single-select options
     const fieldsResult = await graphqlWithAuth(
