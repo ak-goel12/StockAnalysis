@@ -11,7 +11,7 @@ const { graphql } = require("@octokit/graphql");
       },
     });
     console.log(jsonData);
-    for (const task of jsonData?.tasks) {
+    for (const task of jsonData?.items) {
       console.log(`Adding task: ${task.title}`);
 
       await graphqlWithAuth(
