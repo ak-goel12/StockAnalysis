@@ -11,10 +11,10 @@ const { graphql } = require("@octokit/graphql");
       },
     });
 
-    const repositoryId = process.env.REPO_ID; // Repository where issues will be created
+    const repositoryId = process.env.REPO_ID; // Repository ID
     const projectId = process.env.PROJECT_ID; // Project V2 ID
 
-    // 1️⃣ Fetch all fields dynamically
+    // 1️⃣ Fetch all project fields with proper inline fragments
     const fieldsResult = await graphqlWithAuth(
       `
       query($projectId: ID!) {
@@ -22,20 +22,42 @@ const { graphql } = require("@octokit/graphql");
           ... on ProjectV2 {
             fields(first: 50) {
               nodes {
-                id
-                name
-                settings
+                __typename
+                ... on ProjectV2SingleSelectField {
+                  id
+                  name
+                  settings
+                }
+                ... on ProjectV2TextField {
+                  id
+                  name
+                }
+                ... on ProjectV2IterationField {
+                  id
+                  name
+                }
+                ... on ProjectV2DateField {
+                  id
+                  name
+                }
+                ... on ProjectV2AssigneeField {
+                  id
+                  name
+                }
               }
             }
           }
         }
       }
-    `,
+      `,
       { projectId }
     );
 
     const projectFields = fieldsResult.node.fields.nodes;
-    const statusField = projectFields.find(f => f.name.toLowerCase() === "status");
+    // Pick the Status field (SingleSelect) dynamically
+    const statusField = projectFields.find(
+      f => f.__typename === "ProjectV2SingleSelectField" && f.name.toLowerCase() === "status"
+    );
 
     if (!statusField) {
       console.warn("⚠️ Status field not found. Status values will not be set.");
@@ -52,7 +74,7 @@ const { graphql } = require("@octokit/graphql");
             issue { id }
           }
         }
-      `,
+        `,
         {
           repositoryId,
           title: task.title,
@@ -71,11 +93,8 @@ const { graphql } = require("@octokit/graphql");
             item { id }
           }
         }
-      `,
-        {
-          projectId,
-          contentId: issueId,
-        }
+        `,
+        { projectId, contentId: issueId }
       );
 
       const projectItemId = addToProjectResult.addProjectV2ItemById.item.id;
@@ -95,7 +114,7 @@ const { graphql } = require("@octokit/graphql");
               projectV2Item { id }
             }
           }
-        `,
+          `,
           {
             projectId,
             itemId: projectItemId,
