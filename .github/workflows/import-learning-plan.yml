@@ -23,4 +23,4 @@ jobs:
         run: node scripts/import-to-project.js
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
-          PROJECT_ID: "PVT_kwHOA2t8D84ABCD1" # Replace with your project ID
+          PROJECT_ID: "PVT_kwHOAqSiIs4BAlUq" # Replace with your project ID
