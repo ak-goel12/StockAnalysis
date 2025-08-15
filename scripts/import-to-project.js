@@ -11,27 +11,103 @@ const { graphql } = require("@octokit/graphql");
       },
     });
 
-    for (const task of jsonData?.items) {
-      console.log(`Adding task: ${task.title}`);
+    const repositoryId = process.env.REPO_ID; // Repository where issues will be created
+    const projectId = process.env.PROJECT_ID; // Project V2 ID
 
-      await graphqlWithAuth(
-        `
-        mutation($projectId: ID!, $note: String!) {
-          addProjectV2Item(input: { projectId: $projectId, content: { note: $note } }) {
-            item {
-              id
+    // 1️⃣ Fetch all fields dynamically
+    const fieldsResult = await graphqlWithAuth(
+      `
+      query($projectId: ID!) {
+        node(id: $projectId) {
+          ... on ProjectV2 {
+            fields(first: 50) {
+              nodes {
+                id
+                name
+                settings
+              }
             }
+          }
+        }
+      }
+    `,
+      { projectId }
+    );
+
+    const projectFields = fieldsResult.node.fields.nodes;
+    const statusField = projectFields.find(f => f.name.toLowerCase() === "status");
+
+    if (!statusField) {
+      console.warn("⚠️ Status field not found. Status values will not be set.");
+    }
+
+    for (const task of jsonData?.items) {
+      console.log(`Creating issue for task: ${task.title}`);
+
+      // 2️⃣ Create the issue
+      const createIssueResult = await graphqlWithAuth(
+        `
+        mutation($repositoryId: ID!, $title: String!, $body: String) {
+          createIssue(input: { repositoryId: $repositoryId, title: $title, body: $body }) {
+            issue { id }
           }
         }
       `,
         {
-          projectId: process.env.PROJECT_ID,
-          note: task.title, // pass the task title as note
+          repositoryId,
+          title: task.title,
+          body: task.description || "",
         }
       );
+
+      const issueId = createIssueResult.createIssue.issue.id;
+      console.log(`Issue created: ${issueId}`);
+
+      // 3️⃣ Add issue to Project V2
+      const addToProjectResult = await graphqlWithAuth(
+        `
+        mutation($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+            item { id }
+          }
+        }
+      `,
+        {
+          projectId,
+          contentId: issueId,
+        }
+      );
+
+      const projectItemId = addToProjectResult.addProjectV2ItemById.item.id;
+      console.log(`Task added to project: ${projectItemId}`);
+
+      // 4️⃣ Set Status field if exists
+      if (statusField && task.status) {
+        await graphqlWithAuth(
+          `
+          mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
+            updateProjectV2ItemFieldValue(input: {
+              projectId: $projectId,
+              itemId: $itemId,
+              fieldId: $fieldId,
+              value: $value
+            }) {
+              projectV2Item { id }
+            }
+          }
+        `,
+          {
+            projectId,
+            itemId: projectItemId,
+            fieldId: statusField.id,
+            value: task.status,
+          }
+        );
+        console.log(`Status set to: ${task.status}`);
+      }
     }
 
-    console.log("✅ All tasks added successfully!");
+    console.log("✅ All tasks imported successfully!");
   } catch (error) {
     console.error("❌ Error importing tasks:", error);
     process.exit(1);
