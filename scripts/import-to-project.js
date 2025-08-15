@@ -17,7 +17,7 @@ const { graphql } = require("@octokit/graphql");
       await graphqlWithAuth(
         `
         mutation($projectId: ID!, $title: String!, $status: String!) {
-          addProjectV2ItemByTitle(
+          addProjectV2ItemById(
             input: { projectId: $projectId, title: $title }
           ) {
             item {
