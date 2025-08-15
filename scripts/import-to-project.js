@@ -10,8 +10,8 @@ const { graphql } = require("@octokit/graphql");
         authorization: `bearer ${process.env.GH_PAT}`,
       },
     });
-
-    for (const task of jsonData.tasks) {
+    console.log(jsonData);
+    for (const task of jsonData?.tasks) {
       console.log(`Adding task: ${task.title}`);
 
       await graphqlWithAuth(
