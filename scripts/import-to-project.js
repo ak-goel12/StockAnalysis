@@ -18,7 +18,7 @@ const { graphql } = require("@octokit/graphql");
         `
         mutation($projectId: ID!, $title: String!, $status: String!) {
           addProjectV2ItemById(
-            input: { projectId: $projectId, title: $title }
+            input: { projectId: $projectId, content: {note: $title} }
           ) {
             item {
               id
