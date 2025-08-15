@@ -11,10 +11,10 @@ const { graphql } = require("@octokit/graphql");
       },
     });
 
-    const repositoryId = process.env.REPO_ID; // Repository ID
-    const projectId = process.env.PROJECT_ID; // Project V2 ID
+    const projectId = process.env.PROJECT_ID;
+    const repositoryId = process.env.REPO_ID;
 
-    // 1️⃣ Fetch all project fields with proper inline fragments
+    // 1️⃣ Fetch all project fields and their single-select options
     const fieldsResult = await graphqlWithAuth(
       `
       query($projectId: ID!) {
@@ -26,23 +26,10 @@ const { graphql } = require("@octokit/graphql");
                 ... on ProjectV2SingleSelectField {
                   id
                   name
-                  settings
-                }
-                ... on ProjectV2TextField {
-                  id
-                  name
-                }
-                ... on ProjectV2IterationField {
-                  id
-                  name
-                }
-                ... on ProjectV2DateField {
-                  id
-                  name
-                }
-                ... on ProjectV2AssigneeField {
-                  id
-                  name
+                  options {
+                    id
+                    name
+                  }
                 }
               }
             }
@@ -54,20 +41,27 @@ const { graphql } = require("@octokit/graphql");
     );
 
     const projectFields = fieldsResult.node.fields.nodes;
-    // Pick the Status field (SingleSelect) dynamically
+
+    // Find the Status field and map option names to IDs
     const statusField = projectFields.find(
       f => f.__typename === "ProjectV2SingleSelectField" && f.name.toLowerCase() === "status"
     );
 
-    if (!statusField) {
-      console.warn("⚠️ Status field not found. Status values will not be set.");
+    const statusMap = {};
+    if (statusField) {
+      for (const option of statusField.options) {
+        statusMap[option.name.toLowerCase()] = option.id;
+      }
+    } else {
+      console.warn("⚠️ Status field not found. Tasks will be added without status.");
     }
 
-    for (const task of jsonData?.items) {
-      console.log(`Creating issue for task: ${task.title}`);
+    // 2️⃣ Loop through tasks
+    for (const task of jsonData.items) {
+      console.log(`Creating issue: ${task.title}`);
 
-      // 2️⃣ Create the issue
-      const createIssueResult = await graphqlWithAuth(
+      // Create issue in repository
+      const createIssue = await graphqlWithAuth(
         `
         mutation($repositoryId: ID!, $title: String!, $body: String) {
           createIssue(input: { repositoryId: $repositoryId, title: $title, body: $body }) {
@@ -78,15 +72,14 @@ const { graphql } = require("@octokit/graphql");
         {
           repositoryId,
           title: task.title,
-          body: task.description || "",
+          body: task.body || "",
         }
       );
 
-      const issueId = createIssueResult.createIssue.issue.id;
-      console.log(`Issue created: ${issueId}`);
+      const issueId = createIssue.createIssue.issue.id;
 
-      // 3️⃣ Add issue to Project V2
-      const addToProjectResult = await graphqlWithAuth(
+      // Add issue to Project V2
+      const addToProject = await graphqlWithAuth(
         `
         mutation($projectId: ID!, $contentId: ID!) {
           addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
@@ -97,36 +90,42 @@ const { graphql } = require("@octokit/graphql");
         { projectId, contentId: issueId }
       );
 
-      const projectItemId = addToProjectResult.addProjectV2ItemById.item.id;
-      console.log(`Task added to project: ${projectItemId}`);
+      const projectItemId = addToProject.addProjectV2ItemById.item.id;
 
-      // 4️⃣ Set Status field if exists
+      // Set Status if field and option exist
       if (statusField && task.status) {
-        await graphqlWithAuth(
-          `
-          mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: String!) {
-            updateProjectV2ItemFieldValue(input: {
-              projectId: $projectId,
-              itemId: $itemId,
-              fieldId: $fieldId,
-              value: $value
-            }) {
-              projectV2Item { id }
+        const optionId = statusMap[task.status.toLowerCase()];
+        if (optionId) {
+          await graphqlWithAuth(
+            `
+            mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId,
+                itemId: $itemId,
+                fieldId: $fieldId,
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
             }
-          }
-          `,
-          {
-            projectId,
-            itemId: projectItemId,
-            fieldId: statusField.id,
-            value: task.status,
-          }
-        );
-        console.log(`Status set to: ${task.status}`);
+            `,
+            {
+              projectId,
+              itemId: projectItemId,
+              fieldId: statusField.id,
+              optionId,
+            }
+          );
+          console.log(`Status set to: ${task.status}`);
+        } else {
+          console.warn(`⚠️ Status option "${task.status}" not found in project. Skipping status.`);
+        }
       }
+
+      console.log(`✅ Task added: ${task.title}`);
     }
 
-    console.log("✅ All tasks imported successfully!");
+    console.log("🎉 All tasks imported successfully!");
   } catch (error) {
     console.error("❌ Error importing tasks:", error);
     process.exit(1);
