@@ -1,0 +1,26 @@
+name: Import Learning Plan to Project
+
+on:
+  workflow_dispatch: # Run manually from GitHub Actions tab
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install @octokit/graphql
+
+      - name: Run Import Script
+        run: node scripts/import-to-project.js
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          PROJECT_ID: "PVT_kwHOA2t8D84ABCD1" # Replace with your project ID
