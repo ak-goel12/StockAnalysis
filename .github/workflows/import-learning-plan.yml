@@ -24,3 +24,4 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           PROJECT_ID: "PVT_kwHOAqSiIs4BAlUq" # Replace with your project ID
+          REPO_ID: ${{ secrets.REPO_ID}}
