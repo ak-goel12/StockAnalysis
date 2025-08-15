@@ -10,16 +10,14 @@ const { graphql } = require("@octokit/graphql");
         authorization: `bearer ${process.env.GH_PAT}`,
       },
     });
-    console.log(jsonData);
+
     for (const task of jsonData?.items) {
       console.log(`Adding task: ${task.title}`);
 
       await graphqlWithAuth(
         `
-        mutation($projectId: ID!, $title: String!, $status: String!) {
-          addProjectV2ItemById(
-            input: { projectId: $projectId, content: {note: $title} }
-          ) {
+        mutation($projectId: ID!, $note: String!) {
+          addProjectV2Item(input: { projectId: $projectId, content: { note: $note } }) {
             item {
               id
             }
@@ -28,8 +26,7 @@ const { graphql } = require("@octokit/graphql");
       `,
         {
           projectId: process.env.PROJECT_ID,
-          title: task.title,
-          status: task.status || "Todo",
+          note: task.title, // pass the task title as note
         }
       );
     }
